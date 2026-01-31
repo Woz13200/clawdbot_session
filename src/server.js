@@ -12,15 +12,15 @@ app.get("/health", (req,res)=>res.json({ok:true, sessions:listSessions().length}
 app.get("/", (req,res)=>res.send("clawdbot ok"));
 
 app.post("/pair/init", (req,res)=>{
-  const pairKey = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  res.json({ ok:true, pairKey });
+  const  = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  res.json({ ok:true,  });
 });
 
 app.post("/pair/submit", (req,res)=>{
-  const { pairKey, storageState } = req.body || {};
-  if (!pairKey || !storageState) return res.status(400).json({ok:false, error:"missing pairKey/storageState"});
+  const { , storageState } = req.body || {};
+  if (! || !storageState) return res.status(400).json({ok:false, error:"missing /storageState"});
   if (!Array.isArray(storageState.cookies)) return res.status(400).json({ok:false, error:"storageState.cookies must be array"});
-  setSession(pairKey, { storageState, at: Date.now() });
+  setSession(, { storageState, at: Date.now() });
   res.json({ ok:true });
 });
 
@@ -38,12 +38,12 @@ wss.on("connection", (ws) => {
     if (msg?.type !== "user_prompt" || typeof msg.text !== "string") return;
 
     const prompt = msg.text.trim();
-    if (!msg.pairKey) return ws.send(JSON.stringify({ type:"clawdbot_reply", text:"Error: missing pairKey. Pair first in popup." }));
+    if (!msg.) return ws.send(JSON.stringify({ type:"clawdbot_reply", text:"Error: missing . Pair first in popup." }));
 
     queue.add(async () => {
       try{
         const reply = await runBrain(prompt, {
-          pairKey: msg.pairKey,
+          : msg.,
           target: msg.target || process.env.CDB_TARGET || "chatgpt",
           chatUrl: msg.chatUrl || process.env.CDB_CHAT_URL || undefined,
           headless: process.env.CDB_HEADLESS !== "0"
