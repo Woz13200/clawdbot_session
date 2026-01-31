@@ -10,8 +10,8 @@ app.get("/", (req, res) => {
 });
 
 app.post("/pair", (req, res) => {
-  const pairKey = Math.random().toString(36).slice(2) + Date.now();
-  res.json({ ok: true, pairKey });
+  res.json({ ok: true, implicit: true });
+});
 });
 
 app.listen(PORT, () => {
