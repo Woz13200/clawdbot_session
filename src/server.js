@@ -1,17 +1,34 @@
+// ===============================
+// CLAWDBOT — BACKEND OPTION B
+// Playwright + Live View + Agent
+// ===============================
+
+// ✅ IMPORTS OBLIGATOIRES
 import express from "express";
 import { WebSocketServer } from "ws";
 import net from "net";
 import http from "http";
 import { act, ensure } from "./agent/browser.js";
 
+// ===============================
+// APP EXPRESS
+// ===============================
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
 const PORT = Number(process.env.PORT || 10000);
 const NOVNC_DIR = "/usr/share/novnc";
 
-app.get("/", (_, res) => res.send("Clawdbot backend alive (Playwright + Live View)"));
+// ===============================
+// ROUTES DE BASE
+// ===============================
+app.get("/", (_, res) => {
+  res.send("Clawdbot backend alive — agent ready");
+});
 
+// ===============================
+// LIVE VIEW (VNC)
+// ===============================
 app.get("/view", (_, res) => {
   res.type("html").send(`
 <!doctype html>
@@ -20,10 +37,15 @@ app.get("/view", (_, res) => {
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Clawdbot Live View</title>
-  <style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style>
+  <style>
+    html,body { margin:0; height:100%; background:#000 }
+    iframe { border:0; width:100%; height:100% }
+  </style>
 </head>
 <body>
-  <iframe src="/novnc/vnc.html?autoconnect=1&resize=remote&reconnect=1&reconnect_delay=2000&path=websockify"></iframe>
+  <iframe
+    src="/novnc/vnc.html?autoconnect=1&resize=remote&reconnect=1&path=websockify">
+  </iframe>
 </body>
 </html>
   `);
@@ -31,24 +53,38 @@ app.get("/view", (_, res) => {
 
 app.use("/novnc", express.static(NOVNC_DIR, { fallthrough: false }));
 
+// ===============================
+// API AGENT — ACTIONS RÉELLES
+// ===============================
 app.post("/api/act", async (req, res) => {
   try {
-    await ensure();                 // lance le navigateur au besoin
-    const out = await act(req.body);
-    if (!out.ok) return res.status(400).json(out);
-    res.json(out);
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
+    await ensure();            // démarre le navigateur si nécessaire
+    const result = await act(req.body);
+
+    if (!result?.ok) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message || err),
+    });
   }
 });
 
+// ===============================
+// WEBSOCKET → VNC (noVNC bridge)
+// ===============================
 const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 httpServer.on("upgrade", (req, socket, head) => {
-  const url = req.url || "";
-  if (url.startsWith("/websockify")) {
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  if ((req.url || "").startsWith("/websockify")) {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws);
+    });
   } else {
     socket.destroy();
   }
@@ -76,8 +112,11 @@ wss.on("connection", (ws) => {
   vnc.on("error", cleanup);
 });
 
+// ===============================
+// START SERVER
+// ===============================
 httpServer.listen(PORT, () => {
-  console.log("[CDB] Listening on", PORT);
-  console.log("[CDB] Live view: /view");
-  console.log("[CDB] Actions: POST /api/act");
+  console.log("[CDB] Server listening on", PORT);
+  console.log("[CDB] Live view  → /view");
+  console.log("[CDB] Agent API  → POST /api/act");
 });
