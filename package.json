@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "ws": "^8.17.0",
     "p-queue": "^8.0.1",
-    "playwright": "^1.48.2"
+    "playwright": "^1.48.2",
+    "ws": "^8.19.0"
   }
 }
