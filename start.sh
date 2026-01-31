@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
-export DISPLAY=${DISPLAY:-:99}
-export PORT=${PORT:-10000}
+: "${PORT:=10000}"
+export DISPLAY="${DISPLAY:-:99}"
 
-echo "[CDB] Xvfb $DISPLAY"
-Xvfb $DISPLAY -screen 0 1280x720x24 -ac >/tmp/xvfb.log 2>&1 &
+echo "[BOOT] DISPLAY=$DISPLAY PORT=$PORT"
+
+# X virtual
+Xvfb "$DISPLAY" -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
 sleep 0.5
 
-echo "[CDB] fluxbox"
-fluxbox >/tmp/fluxbox.log 2>&1 &
-sleep 0.5
+# VNC local only (ton node fait le proxy websocket)
+x11vnc -display "$DISPLAY" \
+  -rfbport 5900 -listen 127.0.0.1 \
+  -forever -shared -nopw -noxdamage -quiet &
 
-echo "[CDB] x11vnc :5900"
-x11vnc -display $DISPLAY -forever -shared -rfbport 5900 -nopw -xkb >/tmp/x11vnc.log 2>&1 &
-sleep 0.5
+echo "[BOOT] Xvfb + x11vnc started"
 
-echo "[CDB] node server :$PORT"
-node src/server.js
+# start backend
+exec node src/server.js
