@@ -1,8 +1,6 @@
 services:
   - type: web
-    name: clawdbot
+    name: clawdbot-session
     env: docker
     plan: free
-    dockerfilePath: ./Dockerfile
-    healthCheckPath: /health
     autoDeploy: true

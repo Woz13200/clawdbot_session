@@ -1,15 +1,14 @@
 {
-  "name": "clawdbot",
-  "version": "0.2.0",
-  "private": true,
+  "name": "clawdbot-session",
+  "version": "1.0.0",
   "type": "module",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "p-queue": "^8.0.1",
-    "playwright": "^1.48.2",
-    "ws": "^8.19.0"
+    "ws": "^8.18.0",
+    "playwright": "1.48.2"
   }
 }
