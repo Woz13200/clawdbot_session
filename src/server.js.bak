@@ -1,0 +1,40 @@
+app.post("/api/act", async (req, res) => {
+  try {
+    await ensure();
+
+    // ---- Normalize input (accept: {type,...} OR {action:{...}} OR {actions:[...]}) ----
+    const b = req.body ?? {};
+    let actions = [];
+
+    if (Array.isArray(b.actions)) actions = b.actions;
+    else if (b.action && typeof b.action === "object") actions = [b.action];
+    else if (b.type && typeof b.type === "string") actions = [b];
+    else if (typeof b === "string") actions = [{ type: "say", text: b }];
+    else actions = [];
+
+    // ---- Aliases / compatibility ----
+    actions = actions.map((a) => {
+      if (!a || typeof a !== "object") return a;
+
+      // accept navigate -> goto
+      if (a.type === "navigate") return { ...a, type: "goto" };
+
+      // accept url -> target for some schemas (keep both)
+      if (a.url && !a.target) return { ...a, target: a.url };
+
+      return a;
+    });
+
+    if (!actions.length) {
+      return res.status(400).json({ ok: false, error: "empty/invalid body (need type/action/actions)" });
+    }
+
+    // Call agent with normalized payload
+    const out = await act({ actions });
+
+    if (!out?.ok) return res.status(400).json(out);
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
