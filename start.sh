@@ -18,4 +18,9 @@ x11vnc -display "$DISPLAY" \
 echo "[BOOT] Xvfb + x11vnc started"
 
 # ✅ Lancement du backend avec interface web
-exec node index.js
+# Download TinyLlama model if not already there
+if [ ! -f models/gguf/tinyllama.gguf ]; then
+  echo "[BOOT] Downloading TinyLlama model..."
+  curl -L -o models/gguf/tinyllama.gguf https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+fi
+exec node ./index.js
