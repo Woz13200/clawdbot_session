@@ -1,109 +1,268 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Moltbot — GGUF local</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif; background:radial-gradient(circle at top,#0f172a,#020617); color:#e5e7eb; }
-    header { padding:16px; font-weight:700; background:rgba(0,0,0,.4); backdrop-filter:blur(8px); }
-    .chat { padding:16px; max-width:820px; margin:auto; padding-bottom:90px; }
-    .msg { margin-bottom:12px; padding:12px 14px; border-radius:12px; max-width:80%; white-space:pre-wrap; word-break:break-word; }
-    .bot { background:#064e3b; }
-    .user { background:#1d4ed8; margin-left:auto; text-align:right; }
-    .mini { opacity:.8; font-size:13px; margin-top:6px; }
-    footer { position:fixed; bottom:0; left:0; right:0; padding:12px; background:rgba(0,0,0,.5); backdrop-filter:blur(8px); display:flex; gap:8px; }
-    input { flex:1; padding:12px; border-radius:10px; border:none; outline:none; font-size:16px; }
-    button { padding:12px 16px; border-radius:10px; border:none; background:#2563eb; color:#fff; font-weight:700; }
-    .pill { display:inline-block; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.08); font-size:12px; margin-left:8px; }
+    :root{
+      --bg:#071018;
+      --panel:#0b1b28;
+      --card:#0f2a22;
+      --card2:#0c2233;
+      --text:#e9f2ff;
+      --muted:#a9bdd6;
+      --accent:#2f73ff;
+      --danger:#ff2d2d;
+      --ok:#2cff9a;
+      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 20% 10%, #0f2b3f 0%, var(--bg) 60%),
+                  radial-gradient(1200px 800px at 80% 30%, #1b2a10 0%, rgba(7,16,24,0) 55%);
+      color:var(--text);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+    .app{
+      width:min(980px, 100%);
+      background: rgba(11,27,40,.65);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+    .top{
+      padding:18px 18px 12px 18px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .brain{
+      width:42px;height:42px;border-radius:14px;
+      display:grid;place-items:center;
+      background: linear-gradient(135deg, #0e3a2f, #0a1c2d);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .title{font-weight:800; letter-spacing:.2px}
+    .subtitle{color:var(--muted); font-size:13px; margin-top:2px}
+    .status{
+      margin-left:auto;
+      font-size:13px;
+      color:var(--muted);
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:99px;background:rgba(255,255,255,.2);
+      box-shadow: 0 0 0 4px rgba(255,255,255,.04);
+    }
+    .dot.ok{background:var(--ok); box-shadow: 0 0 0 4px rgba(44,255,154,.12);}
+    .dot.bad{background:var(--danger); box-shadow: 0 0 0 4px rgba(255,45,45,.12);}
+    .mid{
+      padding:18px;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+      min-height: 420px;
+    }
+    .bubble{
+      max-width: 78%;
+      padding:16px 18px;
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.06);
+      background: rgba(15,42,34,.9);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      line-height:1.25;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .bubble.user{
+      margin-left:auto;
+      background: rgba(12,34,51,.92);
+      border-color: rgba(47,115,255,.35);
+    }
+    .bubble.err{
+      background: rgba(60,10,10,.65);
+      border-color: rgba(255,45,45,.45);
+    }
+    .bottom{
+      padding:14px 18px 18px 18px;
+      border-top:1px solid rgba(255,255,255,.06);
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    input{
+      flex:1;
+      height:52px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.25);
+      color:var(--text);
+      padding: 0 14px;
+      outline:none;
+      font-size:16px;
+    }
+    button{
+      height:52px;
+      padding: 0 18px;
+      border-radius: 16px;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor:pointer;
+      box-shadow: 0 14px 30px rgba(47,115,255,.25);
+    }
+    button:disabled{opacity:.55; cursor:not-allowed}
+    .hint{
+      font-size:12px;color:var(--muted);
+      padding: 0 18px 16px 18px;
+    }
+    .small{
+      font-size:12px;color:var(--muted);
+    }
   </style>
 </head>
 <body>
-  <header>🧠 Moltbot — GGUF local <span class="pill" id="pill">prêt</span></header>
+  <div class="app">
+    <div class="top">
+      <div class="brain">🧠</div>
+      <div>
+        <div class="title">Moltbot — GGUF local</div>
+        <div class="subtitle">Assistant autonome local GGUF • sans API</div>
+      </div>
+      <div class="status">
+        <span id="dot" class="dot"></span>
+        <span id="st">connexion…</span>
+      </div>
+    </div>
 
-  <div class="chat" id="chat">
-    <div class="msg bot">Salut Mohammed. Je suis Moltbot.<br>Dis-moi ce que tu veux faire.</div>
+    <div class="mid" id="chat"></div>
+
+    <div class="hint">
+      <span class="small">Astuce: si le modèle démarre, tu peux voir “ready=true” dans /api/status.</span>
+    </div>
+
+    <div class="bottom">
+      <input id="msg" placeholder="Écris à Moltbot…" autocomplete="off" />
+      <button id="send">Envoyer</button>
+    </div>
   </div>
 
-  <footer>
-    <input id="input" placeholder="Écris à Moltbot…" />
-    <button id="btn" onclick="send()">Envoyer</button>
-  </footer>
+<script>
+  const chatEl = document.getElementById("chat");
+  const msgEl = document.getElementById("msg");
+  const sendEl = document.getElementById("send");
+  const stEl = document.getElementById("st");
+  const dotEl = document.getElementById("dot");
 
-  <script>
-    const chatEl = document.getElementById("chat");
-    const input = document.getElementById("input");
-    const pill = document.getElementById("pill");
-    const btn = document.getElementById("btn");
+  function addBubble(text, cls="") {
+    const div = document.createElement("div");
+    div.className = "bubble " + cls;
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
 
-    function add(text, cls) {
-      const d = document.createElement("div");
-      d.className = "msg " + cls;
-      d.textContent = text;
-      chatEl.appendChild(d);
-      window.scrollTo(0, document.body.scrollHeight);
-      return d;
-    }
+  addBubble("Salut Mohammed. Je suis Moltbot.\n\nDis-moi ce que tu veux faire.");
 
-    async function health() {
+  async function parseAnyResponse(res) {
+    const raw = await res.text();
+    // Certains backends renvoient du JSON stringifié dans un champ → on tente plusieurs parse.
+    let data = null;
+    try { data = JSON.parse(raw); }
+    catch { data = { ok:false, error:{ message:"Réponse serveur invalide (non-JSON)", raw } }; }
+
+    // Si reply est un JSON string → parse
+    if (data && typeof data.reply === "string") {
       try {
-        const r = await fetch("/api/health");
-        const j = await r.json();
-        pill.textContent = j.ready ? "prêt" : (j.booting ? "démarrage…" : "chauffe…");
-      } catch (_) {
-        pill.textContent = "offline";
-      }
+        const maybe = JSON.parse(data.reply);
+        data.reply = maybe;
+      } catch {}
     }
-    setInterval(health, 2500);
-    health();
+    return data;
+  }
 
-    async function send() {
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = "";
-      add(text, "user");
+  async function getStatus() {
+    try {
+      const r = await fetch("/api/status", { cache: "no-store" });
+      const data = await parseAnyResponse(r);
+      const s = data?.status || {};
+      const ok = !!s.ready;
+      stEl.textContent = ok ? "prêt" : (s.booting ? "chargement…" : "non prêt");
+      dotEl.className = "dot " + (ok ? "ok" : "bad");
+      return s;
+    } catch (e) {
+      stEl.textContent = "offline";
+      dotEl.className = "dot bad";
+      return { ready:false, lastError: String(e?.message || e) };
+    }
+  }
 
-      btn.disabled = true;
-      const status = add("⏳ Moltbot réfléchit…", "bot");
+  // Poll status
+  setInterval(getStatus, 1500);
+  getStatus();
 
-      const MAX_RETRY = 20; // ✅ stop boucle infinie
-      for (let i = 0; i < MAX_RETRY; i++) {
-        try {
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text })
-          });
+  async function send() {
+    const text = (msgEl.value || "").trim();
+    if (!text) return;
+    msgEl.value = "";
+    addBubble(text, "user");
+    sendEl.disabled = true;
 
-          const data = await res.json();
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: text })
+      });
 
-          if (!res.ok) {
-            // 503 => on attend un peu, puis on retente
-            if (data?.error?.code === 503) {
-              status.textContent = "⏳ Chargement du modèle…";
-              await new Promise(r => setTimeout(r, 1200));
-              continue;
-            }
-            status.textContent = `❌ ${data?.error?.message || "Erreur inconnue"}`;
-            btn.disabled = false;
-            return;
-          }
+      const data = await parseAnyResponse(r);
 
-          status.textContent = data.reply || "⚠️ Réponse vide";
-          btn.disabled = false;
-          return;
-
-        } catch (e) {
-          status.textContent = "⚠️ Erreur réseau, retry…";
-          await new Promise(r => setTimeout(r, 1200));
-        }
+      // Cas 503 (modèle en chargement)
+      if (!r.ok && data?.error?.code === 503) {
+        addBubble("⏳ Chargement du modèle… réessaie dans 10 secondes.", "err");
+        return;
       }
 
-      status.textContent = "❌ Toujours en chargement après plusieurs essais. Recharge la page (Render free peut sleep) ou regarde /api/health.";
-      btn.disabled = false;
-    }
+      if (!r.ok) {
+        const msg = data?.error?.message || "Erreur inconnue";
+        addBubble("❌ " + msg, "err");
+        return;
+      }
 
-    input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
-  </script>
+      // reply peut être string OU objet
+      if (typeof data.reply === "string") {
+        addBubble(data.reply);
+      } else if (data.reply && data.reply.error) {
+        addBubble("❌ " + (data.reply.error.message || "Erreur"), "err");
+      } else {
+        addBubble(JSON.stringify(data.reply, null, 2));
+      }
+    } catch (e) {
+      addBubble("❌ Erreur réseau: " + String(e?.message || e), "err");
+    } finally {
+      sendEl.disabled = false;
+      msgEl.focus();
+    }
+  }
+
+  sendEl.addEventListener("click", send);
+  msgEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") send();
+  });
+</script>
 </body>
 </html>
