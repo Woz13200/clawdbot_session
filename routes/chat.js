@@ -1,66 +1,36 @@
 const express = require("express");
 const router = express.Router();
 
-const LLAMA_PORT = process.env.LLAMA_PORT || "8081";
-const LLAMA_URL = `http://127.0.0.1:${LLAMA_PORT}/completion`;
-
+/*
+  Route POST /api/chat
+  Interface entre la UI et Clawdbot (assistant autonome)
+*/
 router.post("/", async (req, res) => {
   try {
-    const userInput = req.body?.message || "";
+    const message = req.body?.message;
 
-    const prompt = `
-Tu es CLAWDBOT, un agent autonome.
-Réponds clairement et en français.
-
-Utilisateur :
-${userInput}
-
-Réponse :
-`.trim();
-
-    const payload = {
-      prompt,
-      n_predict: 256,
-      temperature: 0.7,
-      stop: ["</s>"]
-    };
-
-    const r = await fetch(LLAMA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!r.ok) {
-      const t = await r.text();
-      return res.status(500).json({
-        agent: "clawdbot",
+    if (!message) {
+      return res.status(400).json({
         status: "error",
-        error: "llama-server error",
-        detail: t
+        error: "No message provided"
       });
     }
 
-    const data = await r.json();
+    // ⚠️ TEMPORAIRE : réponse minimale stable
+    // (on branchera le modèle GGUF + Clawdbot juste après)
+    const reply = `🧠 Clawdbot a bien reçu : "${message}"`;
 
-    const text =
-      data?.content ||
-      data?.completion ||
-      "";
-
-    // 🔒 ICI on GARANTIT le JSON pour l’UI
     return res.json({
-      agent: "clawdbot",
       status: "ok",
-      output: text.trim(),
-      actions: []
+      output: reply
     });
 
   } catch (err) {
+    console.error("CHAT ERROR:", err);
     return res.status(500).json({
-      agent: "clawdbot",
       status: "error",
-      error: err.message
+      error: "Internal server error",
+      detail: String(err)
     });
   }
 });

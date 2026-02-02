@@ -1,15 +1,16 @@
-const express = require('express');
-const bodyParser = require('body-parser');
+const express = require("express");
+const bodyParser = require("body-parser");
+
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static("public"));
 
-// Route chat
-const chatRoute = require('./routes/chat');
-app.use('/chat', chatRoute);
+// 🔗 ROUTE API
+const chatRoute = require("./routes/chat");
+app.use("/api/chat", chatRoute);
 
 app.listen(port, () => {
-  console.log(`[🚀] Serveur Moltbot lancé sur http://localhost:${port}`);
+  console.log("✅ Clawdbot server alive on port", port);
 });
