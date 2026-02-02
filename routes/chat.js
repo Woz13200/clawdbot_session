@@ -1,31 +1,44 @@
 const express = require('express');
-const router = express.Router();
 const { spawn } = require('child_process');
+const router = express.Router();
 
 router.post('/', async (req, res) => {
-  const prompt = req.body.prompt || '';
+  try {
+    const prompt = req.body?.message || req.body?.prompt;
 
-  const llama = spawn('llama-cpp', [
-    '-m', 'models/gguf/tinyllama.gguf',
-    '--threads', '4',
-    '--ctx-size', '2048',
-    '--temp', '0.8',
-    '--top-p', '0.95',
-    '--prompt', prompt
-  ]);
+    if (!prompt) {
+      return res.json({ reply: "❌ Aucun message reçu." });
+    }
 
-  let output = '';
-  llama.stdout.on('data', (data) => {
-    output += data.toString();
-  });
+    const llama = spawn('./llama.cpp/bin/llama-cli', [
+      '-m', 'models/gguf/tinyllama.gguf',
+      '-p', prompt,
+      '--n-predict', '256'
+    ]);
 
-  llama.stderr.on('data', (data) => {
-    console.error(`[stderr] ${data}`);
-  });
+    let output = '';
 
-  llama.on('close', (code) => {
-    res.json({ response: output.trim() });
-  });
+    llama.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    llama.stderr.on('data', (data) => {
+      console.error('[llama stderr]', data.toString());
+    });
+
+    llama.on('close', () => {
+      // 🔐 JSON GARANTI
+      res.json({
+        reply: output.trim() || "⚠️ Le modèle n’a rien répondu."
+      });
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.json({
+      reply: "❌ Erreur serveur Moltbot."
+    });
+  }
 });
 
 module.exports = router;
