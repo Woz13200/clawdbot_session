@@ -1,125 +1,157 @@
-import { spawn } from "child_process";
-import fs from "fs";
-import path from "path";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
-function exists(p) {
-  try { return fs.existsSync(p); } catch { return false; }
+const MODEL_PATH = process.env.GGUF_PATH || "models/gguf/tinyllama.gguf";
+const LLAMA_BIN   = process.env.LLAMA_BIN || "/app/bin/llama-server";
+const LLAMA_HOST  = process.env.LLAMA_HOST || "127.0.0.1";
+const LLAMA_PORT  = Number(process.env.LLAMA_PORT || 8080);
+
+let child = null;
+let ready = false;
+let bootError = null;
+let booting = false;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function pingServer() {
+  // llama.cpp server répond souvent sur /health, sinon on teste /v1/models
+  const base = `http://${LLAMA_HOST}:${LLAMA_PORT}`;
+  try {
+    const r1 = await fetch(`${base}/health`, { method: "GET" });
+    if (r1.ok) return true;
+  } catch (_) {}
+
+  try {
+    const r2 = await fetch(`${base}/v1/models`, { method: "GET" });
+    if (r2.ok) return true;
+  } catch (_) {}
+
+  return false;
 }
 
-function findLlamaServer() {
-  const candidates = [
-    process.env.LLAMA_SERVER_PATH,
-    "/app/bin/llama-server",
-    "/app/llama.cpp/bin/llama-server",
-    "/app/llama.cpp/build/bin/llama-server",
-    "/app/llama-server",
-    "./llama-server",
-    "./bin/llama-server",
-    "/usr/local/bin/llama-server",
-    "/usr/bin/llama-server",
-  ].filter(Boolean);
-
-  for (const c of candidates) {
-    if (exists(c)) return c;
+async function waitReady(timeoutMs = 180000) { // 3 min max
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    if (await pingServer()) return true;
+    await sleep(800);
   }
-  return null;
+  return false;
 }
 
-export function runLocalGGUF(prompt, {
-  modelPath = "/app/models/gguf/tinyllama.gguf",
-  nPredict = 256,
-  temp = 0.7,
-} = {}) {
-  return new Promise((resolve, reject) => {
-    const bin = findLlamaServer();
-    if (!bin) {
-      return reject(new Error("llama-server not found (set LLAMA_SERVER_PATH or fix build path)"));
+function ensureModelFile() {
+  if (!fs.existsSync(MODEL_PATH)) {
+    throw new Error(`GGUF not found at: ${MODEL_PATH}`);
+  }
+}
+
+function spawnServer() {
+  // Important: on force host+port pour être sûr, et on garde un contexte raisonnable
+  const args = [
+    "-m", MODEL_PATH,
+    "--host", LLAMA_HOST,
+    "--port", String(LLAMA_PORT),
+    "-c", String(process.env.CTX || 2048),
+    "-n", String(process.env.MAX_TOKENS || 256),
+    "--temp", String(process.env.TEMP || 0.7),
+  ];
+
+  child = spawn(LLAMA_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+
+  child.stdout.on("data", (d) => process.stdout.write(`[llama] ${d}`));
+  child.stderr.on("data", (d) => process.stderr.write(`[llama] ${d}`));
+
+  child.on("exit", (code, sig) => {
+    ready = false;
+    booting = false;
+    bootError = new Error(`llama-server exited code=${code} sig=${sig}`);
+    child = null;
+    console.error("[BOOT] llama-server exited:", bootError.message);
+  });
+
+  child.on("error", (err) => {
+    ready = false;
+    booting = false;
+    bootError = err;
+    child = null;
+    console.error("[BOOT] spawn error:", err.message);
+  });
+}
+
+export async function boot() {
+  if (ready) return;
+  if (booting) return;
+  booting = true;
+  bootError = null;
+
+  try {
+    ensureModelFile();
+    console.log("[BOOT] starting llama-server...");
+    spawnServer();
+
+    const ok = await waitReady();
+    if (!ok) {
+      throw new Error("llama-server did not become ready in time");
     }
 
-    const args = [
-      "-m", modelPath,
-      "-n", String(nPredict),
-      "--temp", String(temp),
-      "--host", "127.0.0.1",
-      "--port", "8080",
-    ];
+    ready = true;
+    console.log("[BOOT] llama-server ready ✅");
+  } catch (e) {
+    ready = false;
+    bootError = e;
+    console.error("[BOOT] failed:", e.message);
+  } finally {
+    booting = false;
+  }
+}
 
-    // Start server
-    const server = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+export function status() {
+  return {
+    ready,
+    booting,
+    model: MODEL_PATH,
+    llama: { bin: LLAMA_BIN, host: LLAMA_HOST, port: LLAMA_PORT },
+    error: bootError ? String(bootError.message || bootError) : null
+  };
+}
 
-    let started = false;
-    let stderr = "";
-    server.stderr.on("data", (d) => {
-      stderr += d.toString();
-    });
+export async function chat(message) {
+  // ✅ si pas prêt, on renvoie une ERREUR CLAIRE (pas une string dans reply)
+  if (!ready) {
+    const s = status();
+    const err = new Error(s.error || "Loading model");
+    err.code = 503;
+    err.type = "unavailable_error";
+    throw err;
+  }
 
-    server.stdout.on("data", (d) => {
-      const s = d.toString();
-      // heuristique: quand ça log l'écoute, on considère "ready"
-      if (!started && (s.includes("listening") || s.includes("HTTP") || s.includes("server"))) {
-        started = true;
-      }
-    });
+  const url = `http://${LLAMA_HOST}:${LLAMA_PORT}/v1/chat/completions`;
 
-    const killServer = () => {
-      try { server.kill("SIGTERM"); } catch {}
-    };
+  const payload = {
+    model: "gguf-local",
+    messages: [
+      { role: "system", content: "Tu es Moltbot. Réponds clairement, utilement, en français." },
+      { role: "user", content: message }
+    ],
+    temperature: Number(process.env.TEMP || 0.7),
+    max_tokens: Number(process.env.MAX_TOKENS || 256)
+  };
 
-    // Timeout start
-    const t = setTimeout(() => {
-      killServer();
-      reject(new Error("llama-server startup timeout"));
-    }, 20000);
-
-    server.on("error", (e) => {
-      clearTimeout(t);
-      reject(e);
-    });
-
-    server.on("exit", (code) => {
-      if (!started) {
-        clearTimeout(t);
-        reject(new Error(`llama-server exited early (${code}). stderr:\n${stderr}`));
-      }
-    });
-
-    // Once server should be up, call it via fetch from node (using native fetch in Node 20)
-    const tryCall = async () => {
-      try {
-        // petit délai pour laisser le serveur se stabiliser
-        await new Promise(r => setTimeout(r, 1200));
-
-        const res = await fetch("http://127.0.0.1:8080/completion", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            n_predict: nPredict,
-            temperature: temp,
-            stop: ["</s>"]
-          }),
-        });
-
-        const txt = await res.text();
-        killServer();
-        clearTimeout(t);
-
-        // Some builds return JSON, some return raw; try parse
-        try {
-          const j = JSON.parse(txt);
-          const out = j.content || j.completion || j.response || txt;
-          resolve(out);
-        } catch {
-          resolve(txt);
-        }
-      } catch (e) {
-        killServer();
-        clearTimeout(t);
-        reject(e);
-      }
-    };
-
-    // try call after short delay regardless of log readiness
-    tryCall();
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
   });
+
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    const e = new Error(`llama-server error ${r.status}: ${txt.slice(0, 200)}`);
+    e.code = 502;
+    e.type = "upstream_error";
+    throw e;
+  }
+
+  const data = await r.json();
+  const reply = data?.choices?.[0]?.message?.content?.trim() || "";
+  return reply || "⚠️ Réponse vide (upstream OK mais content vide)";
 }

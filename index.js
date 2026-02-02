@@ -1,44 +1,43 @@
 import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import { runLocalGGUF } from "./llama.js";
-
-const app = express();
-app.use(express.json({ limit: "2mb" }));
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { boot, chat, status } from "./llama.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Static UI
+const app = express();
+app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Health
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, ...status() });
+});
 
-// ✅ One single API endpoint for the UI
 app.post("/api/chat", async (req, res) => {
   try {
-    const msg = (req.body?.message || "").trim();
-    if (!msg) return res.status(400).json({ error: "missing message" });
+    const msg = String(req.body?.message || "").trim();
+    if (!msg) return res.status(400).json({ ok: false, error: { message: "Empty message", code: 400 } });
 
-    const out = await runLocalGGUF(msg, {
-      modelPath: "/app/models/gguf/tinyllama.gguf",
-      nPredict: 256,
-      temp: 0.7,
-    });
+    // ✅ on tente un boot si pas prêt
+    await boot();
 
-    return res.json({ ok: true, reply: String(out).trim() });
+    const reply = await chat(msg);
+    return res.json({ ok: true, reply });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+    const code = Number(e.code || 500);
+    const type = e.type || "unknown_error";
+    return res.status(code).json({
+      ok: false,
+      error: { message: String(e.message || e), type, code }
+    });
   }
 });
 
-// fallback
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
+const PORT = Number(process.env.PORT || 10000);
+app.listen(PORT, async () => {
+  console.log(`[BOOT] PORT=${PORT}`);
+  // ✅ démarrage en arrière-plan (mais sans bloquer le serveur)
+  boot().catch(() => {});
   console.log(`[BOOT] Listening on ${PORT}`);
 });
