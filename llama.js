@@ -1,8 +1,9 @@
 const { spawn } = require("child_process");
+const path = require("path");
 
-const MODEL_PATH = "./models/tinyllama.gguf";
-const LLAMA_BIN = "./llama-server"; 
-// ⚠️ adapte si ton binaire s'appelle différemment (ex: ./bin/llama-server)
+// 🔥 CHEMINS RÉELS DANS RENDER
+const MODEL_PATH = path.join(__dirname, "models", "tinyllama.gguf");
+const LLAMA_BIN = path.join(__dirname, "bin", "llama-server");
 
 function askLlama(prompt) {
   return new Promise((resolve, reject) => {
