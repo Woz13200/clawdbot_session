@@ -1,157 +1,135 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import express from "express";
+
+const app = express();
+app.use(express.json());
+
+/* =========================
+   CONFIG
+========================= */
 
 const MODEL_PATH = process.env.GGUF_PATH || "models/gguf/tinyllama.gguf";
-const LLAMA_BIN   = process.env.LLAMA_BIN || "/app/bin/llama-server";
-const LLAMA_HOST  = process.env.LLAMA_HOST || "127.0.0.1";
-const LLAMA_PORT  = Number(process.env.LLAMA_PORT || 8080);
+const LLAMA_PORT = 8080;
+const API_PORT = process.env.PORT || 10000;
 
-let child = null;
-let ready = false;
-let bootError = null;
-let booting = false;
+const POSSIBLE_LLAMA_BINS = [
+  "/app/bin/llama-server",
+  "/app/build/bin/llama-server",
+  "/app/llama.cpp/build/bin/llama-server",
+  "/app/llama-server"
+];
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+let llamaProcess = null;
+let llamaReady = false;
 
-async function pingServer() {
-  // llama.cpp server répond souvent sur /health, sinon on teste /v1/models
-  const base = `http://${LLAMA_HOST}:${LLAMA_PORT}`;
-  try {
-    const r1 = await fetch(`${base}/health`, { method: "GET" });
-    if (r1.ok) return true;
-  } catch (_) {}
+/* =========================
+   UTILS
+========================= */
 
-  try {
-    const r2 = await fetch(`${base}/v1/models`, { method: "GET" });
-    if (r2.ok) return true;
-  } catch (_) {}
-
-  return false;
-}
-
-async function waitReady(timeoutMs = 180000) { // 3 min max
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeoutMs) {
-    if (await pingServer()) return true;
-    await sleep(800);
-  }
-  return false;
-}
-
-function ensureModelFile() {
-  if (!fs.existsSync(MODEL_PATH)) {
-    throw new Error(`GGUF not found at: ${MODEL_PATH}`);
-  }
-}
-
-function spawnServer() {
-  // Important: on force host+port pour être sûr, et on garde un contexte raisonnable
-  const args = [
-    "-m", MODEL_PATH,
-    "--host", LLAMA_HOST,
-    "--port", String(LLAMA_PORT),
-    "-c", String(process.env.CTX || 2048),
-    "-n", String(process.env.MAX_TOKENS || 256),
-    "--temp", String(process.env.TEMP || 0.7),
-  ];
-
-  child = spawn(LLAMA_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
-
-  child.stdout.on("data", (d) => process.stdout.write(`[llama] ${d}`));
-  child.stderr.on("data", (d) => process.stderr.write(`[llama] ${d}`));
-
-  child.on("exit", (code, sig) => {
-    ready = false;
-    booting = false;
-    bootError = new Error(`llama-server exited code=${code} sig=${sig}`);
-    child = null;
-    console.error("[BOOT] llama-server exited:", bootError.message);
-  });
-
-  child.on("error", (err) => {
-    ready = false;
-    booting = false;
-    bootError = err;
-    child = null;
-    console.error("[BOOT] spawn error:", err.message);
-  });
-}
-
-export async function boot() {
-  if (ready) return;
-  if (booting) return;
-  booting = true;
-  bootError = null;
-
-  try {
-    ensureModelFile();
-    console.log("[BOOT] starting llama-server...");
-    spawnServer();
-
-    const ok = await waitReady();
-    if (!ok) {
-      throw new Error("llama-server did not become ready in time");
+function findLlamaBin() {
+  for (const p of POSSIBLE_LLAMA_BINS) {
+    if (fs.existsSync(p)) {
+      console.log("✅ llama-server trouvé :", p);
+      return p;
     }
-
-    ready = true;
-    console.log("[BOOT] llama-server ready ✅");
-  } catch (e) {
-    ready = false;
-    bootError = e;
-    console.error("[BOOT] failed:", e.message);
-  } finally {
-    booting = false;
   }
+  throw new Error("❌ llama-server introuvable (chemin invalide)");
 }
 
-export function status() {
-  return {
-    ready,
-    booting,
-    model: MODEL_PATH,
-    llama: { bin: LLAMA_BIN, host: LLAMA_HOST, port: LLAMA_PORT },
-    error: bootError ? String(bootError.message || bootError) : null
-  };
-}
+function startLlama() {
+  if (llamaProcess) return;
 
-export async function chat(message) {
-  // ✅ si pas prêt, on renvoie une ERREUR CLAIRE (pas une string dans reply)
-  if (!ready) {
-    const s = status();
-    const err = new Error(s.error || "Loading model");
-    err.code = 503;
-    err.type = "unavailable_error";
-    throw err;
-  }
+  const llamaBin = findLlamaBin();
 
-  const url = `http://${LLAMA_HOST}:${LLAMA_PORT}/v1/chat/completions`;
+  console.log("🚀 Démarrage llama-server...");
+  llamaProcess = spawn(llamaBin, [
+    "-m", MODEL_PATH,
+    "--port", LLAMA_PORT.toString(),
+    "--host", "127.0.0.1",
+    "--n-predict", "256",
+    "--temp", "0.7"
+  ]);
 
-  const payload = {
-    model: "gguf-local",
-    messages: [
-      { role: "system", content: "Tu es Moltbot. Réponds clairement, utilement, en français." },
-      { role: "user", content: message }
-    ],
-    temperature: Number(process.env.TEMP || 0.7),
-    max_tokens: Number(process.env.MAX_TOKENS || 256)
-  };
-
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+  llamaProcess.stdout.on("data", (d) => {
+    const out = d.toString();
+    console.log(out);
+    if (out.toLowerCase().includes("listening")) {
+      llamaReady = true;
+      console.log("✅ llama-server prêt");
+    }
   });
 
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    const e = new Error(`llama-server error ${r.status}: ${txt.slice(0, 200)}`);
-    e.code = 502;
-    e.type = "upstream_error";
-    throw e;
+  llamaProcess.stderr.on("data", (d) => {
+    console.error("llama stderr:", d.toString());
+  });
+
+  llamaProcess.on("exit", (code) => {
+    console.error("❌ llama-server arrêté (code", code, ")");
+    llamaProcess = null;
+    llamaReady = false;
+  });
+}
+
+/* =========================
+   API
+========================= */
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    modelReady: llamaReady
+  });
+});
+
+app.post("/api/chat", async (req, res) => {
+  if (!llamaReady) {
+    return res.status(503).json({
+      error: {
+        message: "Loading model",
+        type: "unavailable_error",
+        code: 503
+      }
+    });
   }
 
-  const data = await r.json();
-  const reply = data?.choices?.[0]?.message?.content?.trim() || "";
-  return reply || "⚠️ Réponse vide (upstream OK mais content vide)";
-}
+  const prompt = req.body?.message;
+  if (!prompt) {
+    return res.status(400).json({
+      error: { message: "Missing message" }
+    });
+  }
+
+  try {
+    const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/completion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        n_predict: 256,
+        temperature: 0.7
+      })
+    });
+
+    const data = await r.json();
+    res.json({
+      ok: true,
+      reply: data.content || data.response || ""
+    });
+  } catch (e) {
+    res.status(500).json({
+      error: { message: "llama-server unreachable" }
+    });
+  }
+});
+
+/* =========================
+   BOOT
+========================= */
+
+startLlama();
+
+app.listen(API_PORT, () => {
+  console.log(`✅ API Moltbot en écoute sur ${API_PORT}`);
+});
