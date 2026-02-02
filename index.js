@@ -1,62 +1,44 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const path = require("path");
-const { askLlama } = require("./llama");
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+import { runLocalGGUF } from "./llama.js";
 
 const app = express();
+app.use(express.json({ limit: "2mb" }));
 
-/* =========================
-   MIDDLEWARES
-========================= */
-app.use(bodyParser.json());
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Static UI
 app.use(express.static(path.join(__dirname, "public")));
 
-/* =========================
-   ROUTE CHAT – CLAWDBOT
-========================= */
+// Health
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+// ✅ One single API endpoint for the UI
 app.post("/api/chat", async (req, res) => {
-  const message = req.body.message;
-
-  console.log("🧠 Clawdbot actif. Message reçu :", message);
-
-  if (!message || typeof message !== "string") {
-    return res.json({
-      ok: false,
-      error: "Message invalide"
-    });
-  }
-
   try {
-    const answer = await askLlama(message);
+    const msg = (req.body?.message || "").trim();
+    if (!msg) return res.status(400).json({ error: "missing message" });
 
-    res.json({
-      ok: true,
-      agent: "clawdbot",
-      model: "local-gguf",
-      answer: answer
+    const out = await runLocalGGUF(msg, {
+      modelPath: "/app/models/gguf/tinyllama.gguf",
+      nPredict: 256,
+      temp: 0.7,
     });
 
-  } catch (err) {
-    console.error("❌ Erreur modèle :", err);
-
-    res.json({
-      ok: false,
-      error: String(err)
-    });
+    return res.json({ ok: true, reply: String(out).trim() });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
 
-/* =========================
-   FALLBACK FRONT
-========================= */
+// fallback
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/* =========================
-   START SERVER
-========================= */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`✅ Clawdbot + modèle GGUF en ligne sur le port ${PORT}`);
+  console.log(`[BOOT] Listening on ${PORT}`);
 });

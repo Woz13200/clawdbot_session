@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 : "${PORT:=10000}"
 
@@ -7,20 +7,17 @@ echo "[BOOT] PORT=$PORT"
 
 mkdir -p models/gguf
 
-# Téléchargement modèle (choisis UNE seule URL valide plus bas)
 MODEL_PATH="models/gguf/tinyllama.gguf"
 
+# ✅ TinyLlama instruct GGUF (choisis un lien direct .gguf)
+# IMPORTANT: si le lien ci-dessous ne marche pas, on le remplacera par ton URL HF exacte.
+MODEL_URL="https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+
 if [ ! -f "$MODEL_PATH" ]; then
-  echo "[BOOT] Downloading TinyLlama GGUF..."
-  # ✅ OPTION A (recommandée): Hugging Face (mets une vraie URL directe .gguf)
-  # curl -L --retry 5 --retry-delay 2 -o "$MODEL_PATH" "https://huggingface.co/<USER>/<REPO>/resolve/main/<FILE>.gguf"
-
-  # ✅ OPTION B: un autre hébergement direct .gguf
-  # curl -L --retry 5 --retry-delay 2 -o "$MODEL_PATH" "https://<TON_URL_DIRECT>.gguf"
-
-  echo "[BOOT] ERROR: No model URL configured in start.sh"
-  exit 1
+  echo "[BOOT] Downloading model..."
+  curl -L --retry 8 --retry-delay 2 --fail -o "$MODEL_PATH" "$MODEL_URL"
 fi
 
-echo "[BOOT] Model ready: $MODEL_PATH"
+echo "[BOOT] Model ready: $MODEL_PATH ($(du -h "$MODEL_PATH" | awk '{print $1}'))"
+
 exec node ./index.js
