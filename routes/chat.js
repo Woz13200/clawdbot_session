@@ -1,42 +1,35 @@
-const express = require('express');
-const { spawn } = require('child_process');
+const express = require("express");
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+/**
+ * Route centrale Clawdbot
+ * Le modèle local est le cerveau
+ * Clawdbot est l'agent décisionnel
+ */
+router.post("/", async (req, res) => {
   try {
-    const prompt = req.body?.message || req.body?.prompt;
+    const userInput = req.body.message || "";
 
-    if (!prompt) {
-      return res.json({ reply: "❌ Aucun message reçu." });
-    }
+    // ⚠️ TEMPORAIRE : réponse mock structurée
+    // (le modèle GGUF sera branché juste après)
+    const response = {
+      agent: "clawdbot",
+      status: "ok",
+      intent: "chat",
+      input: userInput,
+      output: "Je suis Clawdbot. Prêt à agir.",
+      actions: [],
+      memory_write: false
+    };
 
-    const llama = spawn('./llama.cpp/bin/llama-cli', [
-      '-m', 'models/gguf/tinyllama.gguf',
-      '-p', prompt,
-      '--n-predict', '256'
-    ]);
-
-    let output = '';
-
-    llama.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    llama.stderr.on('data', (data) => {
-      console.error('[llama stderr]', data.toString());
-    });
-
-    llama.on('close', () => {
-      // 🔐 JSON GARANTI
-      res.json({
-        reply: output.trim() || "⚠️ Le modèle n’a rien répondu."
-      });
-    });
+    res.setHeader("Content-Type", "application/json");
+    res.status(200).json(response);
 
   } catch (err) {
-    console.error(err);
-    res.json({
-      reply: "❌ Erreur serveur Moltbot."
+    res.status(500).json({
+      agent: "clawdbot",
+      status: "error",
+      error: err.message
     });
   }
 });
