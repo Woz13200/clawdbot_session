@@ -4,94 +4,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Moltbot</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0b0f14; color:#e9eef5; }
-    .wrap { max-width: 900px; margin: 0 auto; padding: 18px; }
-    .card { background:#111823; border:1px solid #1c2a3a; border-radius:14px; padding:16px; }
-    h1 { margin:0 0 10px; font-size:20px; letter-spacing:.3px; }
-    .hint { color:#9ab0c7; font-size:13px; margin-bottom:12px; }
-    .chat { height: 60vh; overflow:auto; padding:12px; background:#0c121b; border:1px solid #1c2a3a; border-radius:12px; }
-    .msg { margin:10px 0; display:flex; gap:10px; }
-    .role { width:84px; font-size:12px; color:#8aa2ba; text-transform:uppercase; letter-spacing:.8px; }
-    .bubble { flex:1; padding:10px 12px; border-radius:12px; border:1px solid #1c2a3a; background:#0f1722; white-space:pre-wrap; }
-    .me .bubble { background:#132235; border-color:#214063; }
-    .row { display:flex; gap:10px; margin-top:12px; }
-    input, button { border-radius:12px; border:1px solid #1c2a3a; background:#0f1722; color:#e9eef5; padding:12px; font-size:15px; }
-    input { flex:1; outline:none; }
-    button { cursor:pointer; background:#1a2c44; border-color:#214063; }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    .footer { margin-top:10px; color:#718aa3; font-size:12px; }
-  </style>
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h1>💬 Moltbot</h1>
-      <div class="hint">Interface web directe. Pas de requêtes HTTP à taper. Tu écris, il répond.</div>
+    <header>
+      <div class="logo">🧠 Moltbot</div>
+      <div class="sub">Chat local GGUF • sans API</div>
+    </header>
 
-      <div id="chat" class="chat"></div>
+    <main id="chat"></main>
 
-      <div class="row">
-        <input id="txt" placeholder="Écris à Moltbot…" autocomplete="off" />
-        <button id="send">Envoyer</button>
-      </div>
+    <form id="form">
+      <input id="input" placeholder="Écris à Moltbot..." autocomplete="off" />
+      <button id="send" type="submit">Envoyer</button>
+    </form>
 
-      <div class="footer">Si ça répond “modèle non prêt”, c’est normal : l’UI marche, on branchera le modèle ensuite.</div>
-    </div>
+    <footer>
+      <span id="status">✅ prêt</span>
+    </footer>
   </div>
 
-  <script>
-    const chat = document.getElementById('chat');
-    const txt = document.getElementById('txt');
-    const send = document.getElementById('send');
-
-    function add(role, content, mine=false) {
-      const div = document.createElement('div');
-      div.className = 'msg' + (mine ? ' me' : '');
-      div.innerHTML = `<div class="role">${role}</div><div class="bubble"></div>`;
-      div.querySelector('.bubble').textContent = content;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    add('system', 'Moltbot est en ligne. Écris un message.');
-
-    async function go() {
-      const prompt = txt.value.trim();
-      if (!prompt) return;
-      txt.value = '';
-      add('toi', prompt, true);
-
-      send.disabled = true;
-      txt.disabled = true;
-
-      try {
-        const r = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          add('moltbot', `Erreur: ${data.error || r.statusText || r.status}`);
-        } else {
-          add('moltbot', data.reply || '(réponse vide)');
-        }
-      } catch (e) {
-        add('moltbot', `Erreur réseau: ${String(e)}`);
-      } finally {
-        send.disabled = false;
-        txt.disabled = false;
-        txt.focus();
-      }
-    }
-
-    send.addEventListener('click', go);
-    txt.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') go();
-    });
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>

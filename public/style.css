@@ -1,0 +1,86 @@
+:root{
+  --bg:#0b0e14;
+  --panel:#121826;
+  --txt:#e8eefc;
+  --muted:#98a2b3;
+  --accent:#7c3aed;
+  --you:#2563eb;
+  --bot:#16a34a;
+  --border:rgba(255,255,255,.08);
+}
+
+*{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
+body{margin:0;background:var(--bg);color:var(--txt);}
+
+.wrap{
+  max-width:900px;
+  margin:0 auto;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  padding:18px;
+  gap:12px;
+}
+
+header{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px 16px;
+}
+
+.logo{font-size:20px;font-weight:800;}
+.sub{font-size:13px;color:var(--muted);margin-top:4px;}
+
+#chat{
+  flex:1;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.msg{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  white-space:pre-wrap;
+  line-height:1.35;
+}
+
+.msg.you{align-self:flex-end;max-width:85%;background:rgba(37,99,235,.14);border-color:rgba(37,99,235,.35);}
+.msg.bot{align-self:flex-start;max-width:85%;background:rgba(22,163,74,.12);border-color:rgba(22,163,74,.35);}
+
+form{
+  display:flex;
+  gap:10px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px;
+}
+
+input{
+  flex:1;
+  border:none;
+  outline:none;
+  background:transparent;
+  color:var(--txt);
+  font-size:16px;
+}
+
+button{
+  border:none;
+  background:var(--accent);
+  color:white;
+  font-weight:700;
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+}
+
+footer{color:var(--muted);font-size:12px;padding:0 4px;}
