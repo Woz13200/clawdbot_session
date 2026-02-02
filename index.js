@@ -1,42 +1,62 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+const path = require("path");
+const { askLlama } = require("./llama");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
-app.use(bodyParser.json());
-app.use(express.static("public"));
 
 /* =========================
-   ROUTE API /api/chat
-   ========================= */
+   MIDDLEWARES
+========================= */
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+/* =========================
+   ROUTE CHAT – CLAWDBOT
+========================= */
 app.post("/api/chat", async (req, res) => {
-  try {
-    const message = req.body?.message;
+  const message = req.body.message;
 
-    if (!message) {
-      return res.status(400).json({
-        status: "error",
-        error: "No message provided"
-      });
-    }
+  console.log("🧠 Clawdbot actif. Message reçu :", message);
 
-    // Réponse TEMPORAIRE (preuve de vie Clawdbot)
+  if (!message || typeof message !== "string") {
     return res.json({
-      status: "ok",
-      output: `🧠 Clawdbot actif. Message reçu : "${message}"`
+      ok: false,
+      error: "Message invalide"
+    });
+  }
+
+  try {
+    const answer = await askLlama(message);
+
+    res.json({
+      ok: true,
+      agent: "clawdbot",
+      model: "local-gguf",
+      answer: answer
     });
 
   } catch (err) {
-    console.error("API CHAT ERROR:", err);
-    return res.status(500).json({
-      status: "error",
-      error: "Internal error",
-      detail: String(err)
+    console.error("❌ Erreur modèle :", err);
+
+    res.json({
+      ok: false,
+      error: String(err)
     });
   }
 });
 
+/* =========================
+   FALLBACK FRONT
+========================= */
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/* =========================
+   START SERVER
+========================= */
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("✅ Clawdbot server running on port", PORT);
+  console.log(`✅ Clawdbot + modèle GGUF en ligne sur le port ${PORT}`);
 });
